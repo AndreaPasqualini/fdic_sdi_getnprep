@@ -69,7 +69,7 @@ To understand what variables are in which report, please refer to the [SDI Gloss
 
     $ python3 sdi_dataset_assembler.py <zipfiles_dir> <conf_file> <out_filename>
 
-where `<conf_file>` is the configuration json file, `<zipfiles_dir>` is the directory that contains the zip files downloaded and `<out_filename>` is the name of the file you want to obtain.
+where `<zipfiles_dir>` is the directory that contains the zip files downloaded, `<conf_file>` is the configuration json file and `<out_filename>` is the name of the file you want to obtain.
 The latter argument is used by [pandas.to_csv()](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_csv.html) as its `path_or_buf` input argument, together with `compression='infer'`.
 This means that if `<out_filename>` ends in `.csv`, the resulting file will be a simple CSV uncompressed file.
 If `<out_filename>` ends in (e.g.) `.csv.xz`, then the CSV file will be automatically compressed with the xz compression method.
