@@ -1,0 +1,42 @@
+{
+  "Total Interest Income": [
+    "intinc",
+    "ilndom",
+    "ilnfor"
+  ],
+  "Total Interest Expense": [
+    "eintexp",
+    "edepdom",
+    "efrepp"
+  ],
+  "Income and Expense": [
+    "nim",
+    "nonii",
+    "esal",
+    "epremagg",
+    "ideoth",
+    "idpretx",
+    "eqcdiv",
+    "noij"
+  ],
+  "Assets and Liabilities": [
+    "numemp",
+    "asset",
+    "sc",
+    "bkprem",
+    "ore",
+    "intan",
+    "liabeq",
+    "liab",
+    "dep",
+    "eqtot",
+    "eq",
+    "frepo",
+    "frepp"
+  ],
+  "Net Loans and Leases": [
+    "lnlsnet",
+    "lnatres",
+    "lnlsgr"
+  ]
+}
