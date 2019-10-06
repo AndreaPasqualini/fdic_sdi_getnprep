@@ -64,8 +64,8 @@ def join_variables(var_csv_dict, zip_files):
 
 
 if __name__ == '__main__':
-    variables_conf_file = sys.argv[1]
-    zip_files_dir = sys.argv[2]
+    zip_files_dir = sys.argv[1]
+    variables_conf_file = sys.argv[2]
     out_file = sys.argv[3]
     if zip_files_dir[-1] != '/':
         zip_files_dir += '/'
