@@ -75,6 +75,16 @@ This means that if `<out_filename>` ends in `.csv`, the resulting file will be a
 If `<out_filename>` ends in (e.g.) `.csv.xz`, then the CSV file will be automatically compressed with the xz compression method.
 
 
+## Dependencies
+
+- [Python 3](https://www.python.org/)
+- [urllib.request](https://docs.python.org/3/library/urllib.request.html)
+- [zipfile](https://docs.python.org/3/library/zipfile.html)
+- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/)
+- [pandas](https://pandas.pydata.org/)
+- [tqdm](https://tqdm.github.io/)
+
+
 ## Disclaimer and license
 
 The contents of this repository are disclosed into the public domain under the [_Do What The F*ck You Want To Public License_](https://choosealicense.com/licenses/wtfpl/).
