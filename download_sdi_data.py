@@ -1,59 +1,72 @@
 #!/usr/bin/python3
 
-import sys
-from bs4 import BeautifulSoup as bs
-from requests import get
-from urllib.request import urlretrieve
+import os, sys
+from datetime import datetime
+import aiohttp, asyncio
 from tqdm import tqdm
 
 
-#%% Obtain HTML source
+#%% Define functions
 
-website = 'https://www5.fdic.gov/sdi/'
-webpage = get(website + 'download_large_list_outside.asp')
-soup = bs(webpage.text, 'lxml')
-tables = soup.find_all('table')
-table = tables[1]
-tablerows = table.find_all('tr', align='center')
+def build_year_urls(year):
+    location = 'https://www7.fdic.gov/sdi/Resource/AllReps/'
+    filename_q1 = f'All_Reports_{year}0331.zip'
+    filename_q2 = f'All_Reports_{year}0630.zip'
+    filename_q3 = f'All_Reports_{year}0930.zip'
+    filename_q4 = f'All_Reports_{year}1231.zip'
+    fnames = [filename_q1, filename_q2, filename_q3, filename_q4]
+    return list(map(lambda x: location + x, fnames))
 
 
-#%% Parse HTML table into a list of tuples
+def build_all_year_urls(start, stop):
+    urls = []
+    for y in range(start, stop+1):
+        q1, q2, q3, q4 = build_year_urls(y)
+        urls.extend([q1, q2, q3, q4])
+    return urls
 
-table_parsed = []
 
-for i, row in enumerate( tablerows ):
-    if i == 0:
-        th0 = row.find('th', id='filename').text
-        th1 = row.find('th', id='filesize').text
-        th2 = row.find('th', id='rptdate').text
-        table_header = (th0, th1, th2)
+async def get(url, destination):
+    fname = url.split('/')[-1]
+    log = 'download.log'
+    try:
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
+            async with session.get(url=url) as response:
+                resp = await response.read()
+    except Exception as e:
+        now = f'[{datetime.now()}]  '
+        with open(destination + log, mode='a') as f:
+            f.write(now + f"Unable to get {url}. Reason: {e.__class__}.\n")
     else:
-        url_relative = row.find('a')['href']
-        url_absolute = website + url_relative
-        columns = row.find_all('td', align='center')
-        row_parsed = tuple([col.text.strip() for col in columns])
-        augmented_row_parsed = row_parsed + (url_absolute,)
-        table_parsed.append(augmented_row_parsed)
+        now = f'[{datetime.now()}]  '
+        size_mb = '{:.3f}'.format(len(resp) / 1024**2)
+        with open(destination + fname, mode='wb') as zipfile:
+            zipfile.write(resp)
+        with open(destination + log, mode='a') as f:
+            f.write(now + f"Got {url} with size {size_mb} MB.\n")
 
 
-#%% Download files and name them appropriately
+async def main(urls, folder, amount):
+    url_loop = tqdm(urls)
+    for u in url_loop:
+        await get(u, folder)
+    # await asyncio.gather(*[await get(u, folder) for u in tqdm(asyncio.as_completed(urls), total=len(urls))])
+    print("Download job finished.\n")
+
+
+#%% Main program
 
 if __name__ == '__main__':
-
-    download_location = sys.argv[1]
-    if download_location[-1] != '/':
-        download_location += '/'
-
-    for entry in tqdm( table_parsed ):
-        if entry[0] != 'All_Reports_2007123.zip':
-            """
-            The reason for which I perform this check is that this file makes
-            little sense. If you check the website, there is such file listed.
-            If you look closer, you'll see that the file name is badly formed
-            (only one digit for the day, right before the dot). If you check
-            the contents of this file and compare them with the file
-            'All_Reports_20071231.zip' (with the name correctly formed), you'll
-            see that the badly named file has outdated data. Hence I discard
-            it.
-            """
-            urlretrieve(entry[3], download_location + entry[0])
+    first_year = int(sys.argv[1])
+    last_year = int(sys.argv[2])
+    destination = sys.argv[3]
+    if destination[-1] != '/':
+        destination += '/'
+    if os.path.exists(destination + 'download.log'):
+        os.remove(destination + 'download.log')
+    dirlist = os.listdir(destination)
+    for f in dirlist:
+        if f.endswith('.zip'):
+            os.remove(destination + f)
+    urls = build_all_year_urls(first_year, last_year)
+    asyncio.run(main(urls, destination, len(urls)))
