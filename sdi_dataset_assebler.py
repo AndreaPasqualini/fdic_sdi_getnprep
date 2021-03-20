@@ -62,7 +62,6 @@ def join_variables(var_csv_dict, zip_files):
 
 #%% Parameter settings
 
-
 if __name__ == '__main__':
     zip_files_dir = sys.argv[1]
     variables_conf_file = sys.argv[2]
