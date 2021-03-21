@@ -1,59 +1,95 @@
 #!/usr/bin/python3
 
-import sys
-from bs4 import BeautifulSoup as bs
-from requests import get
-from urllib.request import urlretrieve
+import os, sys
+import requests
+from datetime import datetime
+from functools import partial
+from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 
 
-#%% Obtain HTML source
+#%% Define functions
 
-website = 'https://www5.fdic.gov/sdi/'
-webpage = get(website + 'download_large_list_outside.asp')
-soup = bs(webpage.text, 'lxml')
-tables = soup.find_all('table')
-table = tables[1]
-tablerows = table.find_all('tr', align='center')
-
-
-#%% Parse HTML table into a list of tuples
-
-table_parsed = []
-
-for i, row in enumerate( tablerows ):
-    if i == 0:
-        th0 = row.find('th', id='filename').text
-        th1 = row.find('th', id='filesize').text
-        th2 = row.find('th', id='rptdate').text
-        table_header = (th0, th1, th2)
-    else:
-        url_relative = row.find('a')['href']
-        url_absolute = website + url_relative
-        columns = row.find_all('td', align='center')
-        row_parsed = tuple([col.text.strip() for col in columns])
-        augmented_row_parsed = row_parsed + (url_absolute,)
-        table_parsed.append(augmented_row_parsed)
+def build_year_urls(year):
+    location = 'https://www7.fdic.gov/sdi/Resource/AllReps/'
+    filename_q1 = f'All_Reports_{year}0331.zip'
+    filename_q2 = f'All_Reports_{year}0630.zip'
+    filename_q3 = f'All_Reports_{year}0930.zip'
+    filename_q4 = f'All_Reports_{year}1231.zip'
+    fnames = [filename_q1, filename_q2, filename_q3, filename_q4]
+    return list(map(lambda x: location + x, fnames))
 
 
-#%% Download files and name them appropriately
+def build_all_year_urls(start, stop):
+    urls = []
+    for y in range(start, stop+1):
+        urls.extend(build_year_urls(y))
+    return urls
+
+
+def compute_total_download_size(urls):
+    total_length = 0
+    for url in urls:
+        with requests.get(url, stream=True) as resp:
+            try:
+                resp.raise_for_status()
+                total_length += int(resp.headers.get('content-length', 0))
+            except requests.HTTPError:
+                continue
+    return total_length
+
+
+def download_remote_file(url, folder='./', log='./download.log'):
+    local_filename = url.split('/')[-1]
+    with requests.get(url, stream=True) as resp:
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError:
+            now = datetime.now()
+            length = 0
+            code = resp.status_code
+            msg = f'Unable to get {url} due to HTTP status code {code}.'
+            with open(log, mode='a') as logfile:
+                logfile.write(f'[{now}]  ' + msg + '\n')
+        else:
+            length = int(resp.headers.get('content-length', 0))
+            with open(folder + local_filename, mode='wb') as fl:
+                for data in resp.iter_content(8192):
+                    fl.write(data)
+            now = datetime.now()
+            size_mb = '{:.3f}'.format(length / 1024**2)
+            msg = f'Successfully got {url} with size {size_mb} MB.'
+            with open(log, mode='a') as logfile:
+                logfile.write(f'[{now}]  ' + msg + '\n')
+    return length
+
+
+def main(urls, destination, logfile, concurrent_downloads):
+    n = len(urls)
+    dload = partial(download_remote_file, folder=destination, log=logfile)
+    with ThreadPool(concurrent_downloads) as pool:
+        for _ in tqdm(pool.imap_unordered(dload, urls), total=n):
+            pass
+
+
+#%% Main program
 
 if __name__ == '__main__':
-
-    download_location = sys.argv[1]
-    if download_location[-1] != '/':
-        download_location += '/'
-
-    for entry in tqdm( table_parsed ):
-        if entry[0] != 'All_Reports_2007123.zip':
-            """
-            The reason for which I perform this check is that this file makes
-            little sense. If you check the website, there is such file listed.
-            If you look closer, you'll see that the file name is badly formed
-            (only one digit for the day, right before the dot). If you check
-            the contents of this file and compare them with the file
-            'All_Reports_20071231.zip' (with the name correctly formed), you'll
-            see that the badly named file has outdated data. Hence I discard
-            it.
-            """
-            urlretrieve(entry[3], download_location + entry[0])
+    destination = sys.argv[1]
+    first_year = int(sys.argv[2])
+    last_year = int(sys.argv[3])
+    try:
+        download_streams = int(sys.argv[4])
+    except IndexError:
+        download_streams = 4
+    if destination[-1] != '/':
+        destination += '/'
+    logfile = destination + 'download.log'
+    if os.path.exists(logfile):
+        os.remove(logfile)
+    dirlist = os.listdir(destination)
+    for f in dirlist:
+        if f.endswith('.zip'):
+            os.remove(destination + f)
+    urls = build_all_year_urls(first_year, last_year)
+    main(urls, destination, logfile, download_streams)
