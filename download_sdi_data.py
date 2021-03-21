@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
 import os, sys
+import requests
 from datetime import datetime
-import aiohttp, asyncio
+from functools import partial
+from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 
 
@@ -21,52 +23,73 @@ def build_year_urls(year):
 def build_all_year_urls(start, stop):
     urls = []
     for y in range(start, stop+1):
-        q1, q2, q3, q4 = build_year_urls(y)
-        urls.extend([q1, q2, q3, q4])
+        urls.extend(build_year_urls(y))
     return urls
 
 
-async def get(url, destination):
-    fname = url.split('/')[-1]
-    log = 'download.log'
-    try:
-        async with aiohttp.ClientSession(raise_for_status=True) as session:
-            async with session.get(url=url) as response:
-                resp = await response.read()
-    except Exception as e:
-        now = f'[{datetime.now()}]  '
-        with open(destination + log, mode='a') as f:
-            f.write(now + f"Unable to get {url}. Reason: {e.__class__}.\n")
-    else:
-        now = f'[{datetime.now()}]  '
-        size_mb = '{:.3f}'.format(len(resp) / 1024**2)
-        with open(destination + fname, mode='wb') as zipfile:
-            zipfile.write(resp)
-        with open(destination + log, mode='a') as f:
-            f.write(now + f"Got {url} with size {size_mb} MB.\n")
+def compute_total_download_size(urls):
+    total_length = 0
+    for url in urls:
+        with requests.get(url, stream=True) as resp:
+            try:
+                resp.raise_for_status()
+                total_length += int(resp.headers.get('content-length', 0))
+            except requests.HTTPError:
+                continue
+    return total_length
 
 
-async def main(urls, folder, amount):
-    url_loop = tqdm(urls)
-    for u in url_loop:
-        await get(u, folder)
-    # await asyncio.gather(*[await get(u, folder) for u in tqdm(asyncio.as_completed(urls), total=len(urls))])
-    print("Download job finished.\n")
+def download_remote_file(url, folder='./', log='./download.log'):
+    local_filename = url.split('/')[-1]
+    with requests.get(url, stream=True) as resp:
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError:
+            now = datetime.now()
+            length = 0
+            code = resp.status_code
+            msg = f'Unable to get {url} due to HTTP status code {code}.'
+            with open(log, mode='a') as logfile:
+                logfile.write(f'[{now}]  ' + msg + '\n')
+        else:
+            length = int(resp.headers.get('content-length', 0))
+            with open(folder + local_filename, mode='wb') as fl:
+                for data in resp.iter_content(8192):
+                    fl.write(data)
+            now = datetime.now()
+            size_mb = '{:.3f}'.format(length / 1024**2)
+            msg = f'Successfully got {url} with size {size_mb} MB.'
+            with open(log, mode='a') as logfile:
+                logfile.write(f'[{now}]  ' + msg + '\n')
+    return length
+
+
+def main(urls, destination, logfile, concurrent_downloads):
+    n = len(urls)
+    dload = partial(download_remote_file, folder=destination, log=logfile)
+    with ThreadPool(concurrent_downloads) as pool:
+        for _ in tqdm(pool.imap_unordered(dload, urls), total=n):
+            pass
 
 
 #%% Main program
 
 if __name__ == '__main__':
-    first_year = int(sys.argv[1])
-    last_year = int(sys.argv[2])
-    destination = sys.argv[3]
+    destination = sys.argv[1]
+    first_year = int(sys.argv[2])
+    last_year = int(sys.argv[3])
+    try:
+        download_streams = int(sys.argv[4])
+    except IndexError:
+        download_streams = 4
     if destination[-1] != '/':
         destination += '/'
-    if os.path.exists(destination + 'download.log'):
-        os.remove(destination + 'download.log')
+    logfile = destination + 'download.log'
+    if os.path.exists(logfile):
+        os.remove(logfile)
     dirlist = os.listdir(destination)
     for f in dirlist:
         if f.endswith('.zip'):
             os.remove(destination + f)
     urls = build_all_year_urls(first_year, last_year)
-    asyncio.run(main(urls, destination, len(urls)))
+    main(urls, destination, logfile, download_streams)
