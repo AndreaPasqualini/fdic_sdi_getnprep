@@ -14,14 +14,14 @@ The objects of interest are the bulk download `.zip` files at [this webpage](htt
 ![bulk_sdi_zips](./img/fdic_sdi_dload.png)
 
 There are many zip files, and manually downloading them hurts my wrist.
-Hence I wrote this [Python](https://www.python.org/)/[BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) program that does the job for me.
+Hence I wrote this [Python](https://www.python.org/) program that does the job for me.
 
 
 ### Main steps of the program
 
 The program is quite easy.
-It goes on the website, it parses the HTML table where all the zip files are listed and then reads the links.
-Finally, the good-ole [`urllib.request.urlretrieve`](https://docs.python.org/3/library/urllib.request.html#urllib.request.urlretrieve) starts the downloads.
+It constructs the URLs for the files over at https://www7.fdic.gov/sdi/download_large_list_outside.asp.
+Finally, the good-ole [`requests`](https://requests.readthedocs.io/en/master/) starts the downloads, which are now parallel thanks to the [MultiProcessing](https://docs.python.org/3/library/multiprocessing.html#multiprocessing.pool.Pool.imap) library.
 There also is a fancy progress bar, courtesy of [tqdm](https://tqdm.github.io/).
 
 There only is one catch.
@@ -37,16 +37,24 @@ Hence my program simply ignores the weird file with a ad-hoc `if` statement.
 
 ### Note
 
-The downloads are started serially, not in parallel.
+The downloads are started in parallel.
+However, the server where the files are hosted is incredibly slow, even for just one download.
 This means that, depending on your internet connection, the download of all files may take quite a while.
 Luckily, the whole thing is very light on your PC resources, meaning you can easily get back to some other work while this program runs in the background.
 
 
 ### Usage
 
-    $ python3 download_sdi_data.py <download_location>
+    $ python3 download_sdi_data.py <folder> <firstyear> <lastyear> <streams>
 
-where `<download_location>` is the folder on your local machine where you want the files to be saved.
+where
+
+- `<folder>` is the folder on your local machine where you want the files to be saved,
+- `<firstyear>` is the first year of data to download (min: 1992, max: current year),
+- `<lastyear>` is the last year of data to download (min: 1993, max: current year), and
+- `<streams>` specifies the number of concurrent download streams to start (defaults to 4).
+
+See [this PowerShell example](./main.ps1) and [this Bash example](./main.sh) to see how to use this CLI utility.
 
 
 ## Extractor
@@ -88,3 +96,8 @@ If `<out_filename>` ends in (e.g.) `.csv.xz`, then the CSV file will be automati
 ## Disclaimer and license
 
 The contents of this repository are disclosed into the public domain under the [_Do What The F*ck You Want To Public License_](https://choosealicense.com/licenses/wtfpl/).
+
+
+## Credits
+
+Thanks to @MarcoPasqualini for help on setting up parallel downloads.
